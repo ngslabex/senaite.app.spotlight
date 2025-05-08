@@ -36,10 +36,12 @@
       <thead>
         <tr>
           <th></th>
-          <th i18n:translate="">Title</th>
-          <th i18n:translate="">ID</th>
-          <th i18n:translate="">Location</th>
-          <th i18n:translate="">Description</th>
+          <th i18n:translate="">Barkod</th>
+          <th i18n:translate="">Hasta Adı</th>
+          <th i18n:translate="">Testler</th>
+          <!-- <th i18n:translate="">ID</th> -->
+          <th i18n:translate="">Kurum</th>
+          <!-- <th i18n:translate="">Description</th> -->
         </tr>
       </thead>
     </table>
@@ -54,14 +56,20 @@
       <a class="link" href="<%- url %>"><%- title_or_id %></a>
     </td>
     <td>
-      <a class="link" href="<%- url %>"><%- id %></a>
+      <span><%- patient_fullname %></span>
     </td>
+    <td>
+      <span><%- test_names %></span>
+    </td>
+    <!-- <td>
+      <a class="link" href="<%- url %>"><%- id %></a>
+    </td> -->
     <td>
       <a class="link" href="<%- parent_url %>"><%- parent_title %></a>
     </td>
-    <td>
+    <!-- <td>
       <span><%- description %></span>
-    </td>
+    </td> -->
   </script>
 
   <script
