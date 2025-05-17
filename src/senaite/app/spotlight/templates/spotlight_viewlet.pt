@@ -53,10 +53,12 @@
     <thead>
       <tr>
         <th></th>
-        <th i18n:translate="">Title</th>
-        <th i18n:translate="">ID</th>
-        <th i18n:translate="">Location</th>
-        <th i18n:translate="">Description</th>
+        <th i18n:translate="">Barkod</th>
+        <th i18n:translate="">Hasta Adı</th>
+        <th i18n:translate="">Testler</th>
+        <!-- <th i18n:translate="">ID</th> -->
+        <th i18n:translate="">Kurum</th>
+        <!-- <th i18n:translate="">Description</th> -->
       </tr>
     </thead>
     <tbody></tbody>
@@ -66,9 +68,9 @@
 <script type="text/template" id="item-template">
   <td><%= icon %></td>
   <td><a class="link" href="<%- url %>"><%- title_or_id %></a></td>
-  <td><a class="link" href="<%- url %>"><%- id %></a></td>
+  <td><span><%- patient_fullname %></span></td>
+  <td><span><%- test_names %></span></td>
   <td><a class="link" href="<%- parent_url %>"><%- parent_title %></a></td>
-  <td><span><%- description %></span></td>
 </script>
 
 <script
