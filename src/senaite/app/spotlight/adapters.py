@@ -106,6 +106,17 @@ def get_brain_info(brain):
     parent_title = api.get_title(parent)
     parent_url = api.get_url(parent)
 
+    obj = api.get_object(brain)
+
+    patient_fullname = ""
+    test_names = ""
+
+    if hasattr(obj, "getPatientFullName"):
+        patient_fullname = obj.getPatientFullName() or ""
+
+    if hasattr(obj, "getAnalyses"):
+        test_names = ", ".join([a.Title for a in obj.getAnalyses()])
+
     return {
         "id": id,
         "title": title,
