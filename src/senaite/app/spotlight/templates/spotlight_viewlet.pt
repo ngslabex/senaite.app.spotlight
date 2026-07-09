@@ -1,11 +1,9 @@
-<!-- Modal -->
-<div id="spotlight"
-     class="modal fade spotlight-overlay"
-     tabindex="-1"
-     role="dialog"
-     aria-labelledby="spotlightLabel"
-     aria-hidden="true">
+<tal:spotlight i18n:domain="senaite.core">
+  <!-- React mount node, the configuration is provided as JSON -->
+  <div id="spotlight-root"
+       tal:attributes="data-config view/get_config_json"></div>
 
+<<<<<<< HEAD
   <div id="spotlight-modal" class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
     <div class="modal-content">
       <div id="search-form">
@@ -86,3 +84,13 @@
   tal:define="portal context/@@plone_portal_state/portal"
   tal:attributes="src string:${portal/absolute_url}/++resource++senaite.app.spotlight.static/js/senaite.app.spotlight.js">
 </script>
+=======
+  <!-- Spotlight bundle (consumes the shared React from senaite.core) -->
+  <script
+      src="#"
+      type="text/javascript"
+      tal:define="portal context/@@plone_portal_state/portal"
+      tal:attributes="src string:${portal/absolute_url}/++resource++senaite.app.spotlight.static/js/senaite.app.spotlight.js">
+  </script>
+</tal:spotlight>
+>>>>>>> upstream/2.x

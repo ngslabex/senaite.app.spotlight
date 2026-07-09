@@ -41,6 +41,7 @@ setup(
     install_requires=[
         "setuptools",
         "senaite.core",
+        "senaite.app.listing",
         "senaite.jsonapi",
     ],
     extras_require={

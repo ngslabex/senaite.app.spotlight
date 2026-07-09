@@ -1,6 +1,9 @@
 2.7.0 (unreleased)
 ------------------
 
+- #35 Remove the "Add" action from the standalone search page
+- #34 Auto-discover installed SENAITE catalogs into the spotlight search
+- #33 Rewrite the spotlight search as a React component
 - #32 Handle catalog search errors gracefully
 - #31 JQuery3 compatibility
 
