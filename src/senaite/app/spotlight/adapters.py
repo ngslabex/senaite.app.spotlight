@@ -148,7 +148,6 @@ def search_brains(catalog, term, limit, state=None):
     Catalog errors are logged and swallowed so a misconfigured catalog does
     not break the whole search.
     """
-<<<<<<< HEAD
     icon = api.get_icon(brain)
     # avoid 404 errors with these guys
     if "document_icon.gif" in icon:
@@ -194,16 +193,6 @@ def search(query=None, catalog=None):
         query = make_query(catalog)
     # no query generated
     if query is None:
-=======
-    name = catalog.get("name")
-    try:
-        query = make_query(catalog, term, limit, state)
-        if query is None:
-            return []
-        return api.search(query, catalog=name)
-    except (APIError, ParseError, CatalogError, KeyError) as exc:
-        logger.warning("Search in catalog '%s' failed: %s", name, exc)
->>>>>>> upstream/2.x
         return []
 
 
