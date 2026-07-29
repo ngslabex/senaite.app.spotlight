@@ -47,6 +47,9 @@ DEFAULT_HOTKEY = u"Control+Space"
 # Default maximum number of search results returned by the search adapter.
 DEFAULT_MAX_RESULTS = 25
 
+# z3c.form / DataGrid stores empty optional cells as this sentinel string
+NO_VALUE = u"<NO_VALUE>"
+
 # Empty defaults for every `ISpotlightCatalog` cell. Rows are always stored
 # with all keys present so the DataGrid widget renders the optional cells
 # blank instead of the z3c.form `<NO_VALUE>` marker for absent keys.
@@ -59,26 +62,52 @@ CATALOG_ROW_DEFAULTS = {
     "sort_on": u"",
     "sort_order": u"ascending",
     "enabled": True,
+    "show_for_clients": True,
+}
+
+# Empty defaults for every `ISpotlightCommand` cell (same rationale as
+# `CATALOG_ROW_DEFAULTS`): rows are stored complete so the DataGrid never
+# renders the `<NO_VALUE>` marker for a blank optional cell.
+COMMAND_ROW_DEFAULTS = {
+    "command_id": u"",
+    "title": u"",
+    "icon": u"",
+    "url": u"",
+    "permission": u"",
+    "keywords": u"",
 }
 
 
-def complete_catalog_row(row):
-    """Return `row` as a full `ISpotlightCatalog` dict.
+def complete_row(row, defaults):
+    """Return `row` as a full dict based on `defaults`.
 
-    Missing (or `None`) cells are filled from `CATALOG_ROW_DEFAULTS`, so a
-    stored row never has absent keys that would render as `<NO_VALUE>`.
-    Byte-string values are coerced to unicode: the row schema fields are
-    `TextLine` (unicode), and a programmatic registry write validates
-    strictly (unlike the GenericSetup import, which coerces silently).
+    Missing (or `None`) cells, and cells left as the z3c.form `<NO_VALUE>`
+    sentinel, are filled from `defaults`, so a stored row never carries an
+    absent key or a raw `<NO_VALUE>` marker. Byte-string values are coerced
+    to unicode: the row schema fields are `TextLine` (unicode), and a
+    programmatic registry write validates strictly (unlike the GenericSetup
+    import, which coerces silently).
     """
-    full = dict(CATALOG_ROW_DEFAULTS)
+    full = dict(defaults)
     for key, value in row.items():
-        if value is None:
+        if value is None or value == NO_VALUE:
             continue
         if isinstance(value, bytes):
             value = api.safe_unicode(value)
         full[key] = value
     return full
+
+
+def complete_catalog_row(row):
+    """Return `row` as a full `ISpotlightCatalog` dict.
+    """
+    return complete_row(row, CATALOG_ROW_DEFAULTS)
+
+
+def complete_command_row(row):
+    """Return `row` as a full `ISpotlightCommand` dict.
+    """
+    return complete_row(row, COMMAND_ROW_DEFAULTS)
 
 
 # Default catalogs to search. Each entry maps to the `ISpotlightCatalog` row
@@ -93,13 +122,15 @@ def complete_catalog_row(row):
 DEFAULT_CATALOGS = [complete_catalog_row(row) for row in [
     {"catalog": "senaite_catalog_sample", "label": u"Samples",
      "prefix": u"s"},
-    {"catalog": "senaite_catalog_setup", "label": u"Setup"},
+    {"catalog": "senaite_catalog_setup", "label": u"Setup",
+     "show_for_clients": False},
     {"catalog": "senaite_catalog_worksheet", "label": u"Worksheets",
-     "prefix": u"w"},
+     "prefix": u"w", "show_for_clients": False},
     {"catalog": "senaite_catalog", "label": u"SENAITE"},
     {"catalog": "senaite_catalog_client", "label": u"Clients",
-     "prefix": u"c"},
-    {"catalog": "senaite_catalog_contact", "label": u"Contacts"},
+     "prefix": u"c", "show_for_clients": False},
+    {"catalog": "senaite_catalog_contact", "label": u"Contacts",
+     "show_for_clients": False},
     {"catalog": "senaite_catalog_report", "label": u"Reports",
      "prefix": u"r", "enabled": False},
     {"catalog": "senaite_catalog_label", "label": u"Labels",
@@ -118,10 +149,14 @@ DEFAULT_CATALOGS = [complete_catalog_row(row) for row in [
 # catalog tools in the portal root without waking unrelated objects.
 CATALOG_META_TYPE = "Plone Catalog Tool"
 
+# Pseudo-states surfaced in the "is:" autocomplete that map to the
+# `is_active` boolean index instead of a workflow `review_state`.
+ACTIVE_STATE_IDS = (u"active", u"inactive")
+
 # Default command palette actions. Each entry maps to the `ISpotlightCommand`
 # row schema. A command with a `permission` is only shown to users that hold
 # the permission on the portal.
-DEFAULT_COMMANDS = [
+DEFAULT_COMMANDS = [complete_command_row(row) for row in [
     {"command_id": u"add-sample", "title": u"Add Samples",
      "icon": u"fas fa-plus", "url": u"${portal_url}/samples/ar_add",
      "permission": AddAnalysisRequest, "keywords": u"new, create, register"},
@@ -138,7 +173,7 @@ DEFAULT_COMMANDS = [
      "permission": ManageBika},
     {"command_id": u"logout", "title": u"Logout",
      "icon": u"fas fa-sign-out-alt", "url": u"${portal_url}/logout"},
-]
+]]
 
 
 class ISpotlightCatalog(Interface):
@@ -205,6 +240,12 @@ class ISpotlightCatalog(Interface):
 
     enabled = schema.Bool(
         title=_(u"Enabled"),
+        default=True,
+        required=False,
+    )
+
+    show_for_clients = schema.Bool(
+        title=_(u"Show for clients"),
         default=True,
         required=False,
     )
@@ -395,10 +436,6 @@ SpotlightControlPanelView = layout.wrap_form(
     SpotlightControlPanelForm, ControlPanelFormWrapper)
 
 
-# z3c.form / DataGrid stores empty optional cells as this sentinel string
-NO_VALUE = u"<NO_VALUE>"
-
-
 def clean(value):
     """Normalize empty DataGrid values (incl. the NO_VALUE sentinel) to None
     """
@@ -425,6 +462,14 @@ def to_list(value):
     return [token.strip() for token in value.split(",") if token.strip()]
 
 
+def to_bool(value, default=True):
+    """Coerce a DataGrid value to a boolean, treating empty cells as default
+    """
+    if value in (None, u"", "", NO_VALUE):
+        return default
+    return bool(value)
+
+
 def parse_catalog(record):
     """Normalize a catalog row into a plain dictionary
     """
@@ -436,6 +481,7 @@ def parse_catalog(record):
         "index": clean(record.get("index")),
         "sort_on": clean(record.get("sort_on")),
         "sort_order": clean(record.get("sort_order")) or "ascending",
+        "show_for_clients": to_bool(record.get("show_for_clients", True)),
     }
 
 
@@ -494,6 +540,7 @@ def discovered_catalog(name):
         "index": None,
         "sort_on": None,
         "sort_order": "ascending",
+        "show_for_clients": True,
     }
 
 
@@ -529,6 +576,33 @@ def get_catalogs():
         catalogs.append(discovered_catalog(name))
         known.add(name)
     return catalogs
+
+
+def is_client_only_user():
+    """Whether the current user is a client contact without lab access
+
+    A client contact is bound to a client, which `api.get_current_client`
+    resolves via the user's contact link. Lab staff (lab contacts, managers,
+    anonymous, ...) are never bound to a client, so this never restricts lab
+    users regardless of how the "Client" role is granted.
+    """
+    return api.get_current_client() is not None
+
+
+def get_searchable_catalogs():
+    """Return the catalogs the current user is allowed to search
+
+    Same as `get_catalogs`, but for client-only users (client contacts)
+    drops every catalog whose `show_for_clients` flag is off, so a client
+    contact never searches lab objects they cannot access (setup, clients,
+    contacts by default). `get_catalogs` stays pure; the role-aware
+    filtering lives here, so every search entry point (modal adapter,
+    full-page search) shares it.
+    """
+    catalogs = get_catalogs()
+    if not is_client_only_user():
+        return catalogs
+    return [c for c in catalogs if c.get("show_for_clients", True)]
 
 
 def discovered_catalog_row(name):
@@ -603,6 +677,34 @@ def get_review_states(catalog_name):
     return states
 
 
+def has_active_index(catalog_name):
+    """Whether the catalog carries the `is_active` boolean index
+    """
+    tool = api.get_tool(catalog_name, default=None)
+    if tool is None:
+        return False
+    return "is_active" in tool._catalog.indexes
+
+
+def get_state_suggestions(catalog_name):
+    """Return the "is:<state>" autocomplete suggestions for a catalog
+
+    The active/inactive pseudo-states (mapped to the `is_active` boolean
+    index) come first when the catalog supports them, followed by the
+    distinct workflow review states. Used to drive the "is:" autocomplete.
+    """
+    suggestions = []
+    if has_active_index(catalog_name):
+        for state_id in ACTIVE_STATE_IDS:
+            suggestions.append(
+                {"id": state_id, "title": prettify_state(state_id)})
+    existing = {suggestion["id"] for suggestion in suggestions}
+    for state in get_review_states(catalog_name):
+        if state["id"] not in existing:
+            suggestions.append(state)
+    return suggestions
+
+
 def get_config():
     """Return the resolved spotlight configuration as a plain dictionary
     """
@@ -612,6 +714,6 @@ def get_config():
         "min_chars": get_record("min_chars", default=2),
         "debounce": get_record("debounce", default=200),
         "highlight": get_record("enable_highlighting", default=True),
-        "catalogs": get_catalogs(),
+        "catalogs": get_searchable_catalogs(),
         "commands": get_commands(),
     }

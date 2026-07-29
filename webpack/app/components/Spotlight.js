@@ -17,17 +17,24 @@ import {
   filterCommands,
   loadPref,
   matchHotkey,
+  multiSelectKey,
   narrowResults,
   parseQuery,
-  resolveScope,
+  resolveScopes,
   savePref,
   sortResults,
+  toggleScope,
 } from "../utils";
 
 
 const Spotlight = ({ config }) => {
-  const catalogs = config.catalogs || [];
-  const commandsConfig = config.commands || [];
+  // Memoize the config-derived arrays: a fresh `[]` on every render would
+  // change the identity of `effectiveScopes` below, which is a dependency of
+  // the debounced search effect, re-arming it on every render and looping the
+  // search endlessly once a term is present.
+  const catalogs = useMemo(() => config.catalogs || [], [config.catalogs]);
+  const commandsConfig = useMemo(
+    () => config.commands || [], [config.commands]);
   const highlight = config.highlight !== false;
   const minChars = config.min_chars || 2;
   const debounceMs = config.debounce || 200;
@@ -38,7 +45,7 @@ const Spotlight = ({ config }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [scope, setScope] = useState(null);
+  const [scope, setScope] = useState([]);
   const [sortBy, setSortBy] = useState(loadPref("sortBy", "relevance"));
   const [dynamicCommands, setDynamicCommands] = useState([]);
 
@@ -58,22 +65,36 @@ const Spotlight = ({ config }) => {
   const {
     term, prefix, state, commandMode, commandTerm, stateMode, statePartial,
   } = useMemo(() => parseQuery(query), [query]);
-  const effectiveScope = resolveScope(catalogs, scope, prefix);
+  // the selected catalog scopes (a list of names; empty means "All"). Memoized
+  // so a stable identity feeds the debounced search effect (see `catalogs`).
+  const effectiveScopes = useMemo(
+    () => resolveScopes(catalogs, scope, prefix), [catalogs, scope, prefix]);
+  const scoped = effectiveScopes.length > 0;
+  // Primitive key for the scopes, so the debounced search effect depends on a
+  // stable string rather than an array identity (which would re-arm it on
+  // every render even if the memo above were ever dropped).
+  const scopeKey = effectiveScopes.join(",");
 
-  // browse mode: an empty term while scoped to a single catalog lists its
-  // first results (the catalog chips / "s:" prefix act as a browse affordance)
-  const browsing =
-    !commandMode && !stateMode && !term && Boolean(effectiveScope);
+  // browse mode: an empty term while scoped to one or more catalogs lists
+  // their first results (chips / "s:" prefix act as a browse affordance)
+  const browsing = !commandMode && !stateMode && !term && scoped;
 
-  // states to suggest: scoped to the active catalog, else the union of all
+  // the default query hides inactive objects; surface that (and the
+  // "is:inactive" escape hatch) whenever results/browse are shown and no
+  // explicit state token overrides the active-only default
+  const showActiveNote =
+    !commandMode && !stateMode && !state
+    && (browsing || term.length >= minChars);
+
+  // states to suggest: the union of the states of the scoped catalogs, or
+  // of every catalog when nothing is scoped ("All")
   const scopedStates = useMemo(() => {
-    if (effectiveScope) {
-      const cat = catalogs.find((c) => c.name === effectiveScope);
-      return (cat && cat.states) || [];
-    }
+    const pool = scoped
+      ? catalogs.filter((c) => effectiveScopes.indexOf(c.name) >= 0)
+      : catalogs;
     const seen = {};
     const out = [];
-    catalogs.forEach((c) =>
+    pool.forEach((c) =>
       (c.states || []).forEach((s) => {
         if (!seen[s.id]) {
           seen[s.id] = true;
@@ -82,7 +103,7 @@ const Spotlight = ({ config }) => {
       })
     );
     return out;
-  }, [catalogs, effectiveScope]);
+  }, [catalogs, effectiveScopes, scoped]);
 
   const suggestions = useMemo(() => {
     if (!stateMode) {
@@ -109,9 +130,9 @@ const Spotlight = ({ config }) => {
       return commandTerm ? filterCommands(all, commandTerm) : all;
     }
     // outside command mode, commands only show in the unscoped ("All") view
-    return effectiveScope ? [] : filterCommands(commandsConfig, term);
+    return scoped ? [] : filterCommands(commandsConfig, term);
   }, [commandsConfig, dynamicCommands, term, commandMode, commandTerm,
-    stateMode, effectiveScope]);
+    stateMode, scoped]);
 
   const sortedResults = useMemo(
     // no catalog results in command or state-suggestion mode
@@ -141,12 +162,15 @@ const Spotlight = ({ config }) => {
     if (filterValue) {
       params.push("search_filter=" + encodeURIComponent(filterValue));
     }
-    if (effectiveScope) {
-      params.push("search_review_state=" + encodeURIComponent(effectiveScope));
+    // the standalone listing supports a single catalog tab, so only carry
+    // the scope through when exactly one catalog is selected
+    if (effectiveScopes.length === 1) {
+      params.push(
+        "search_review_state=" + encodeURIComponent(effectiveScopes[0]));
     }
     const query = params.length ? "?" + params.join("&") : "";
     return (config.search_url || "") + query;
-  }, [config.search_url, term, state, effectiveScope]);
+  }, [config.search_url, term, state, effectiveScopes]);
 
   // Run the actual search request, ignoring stale responses
   const runSearch = useCallback(
@@ -195,10 +219,10 @@ const Spotlight = ({ config }) => {
       return undefined;
     }
     debounceTimer.current = setTimeout(() => {
-      runSearch(term, effectiveScope, state);
+      runSearch(term, scopeKey, state);
     }, debounceMs);
     return () => clearTimeout(debounceTimer.current);
-  }, [term, effectiveScope, state, commandMode, stateMode, browsing, open,
+  }, [term, scopeKey, state, commandMode, stateMode, browsing, open,
     minChars, debounceMs, runSearch]);
 
   // Lazily fetch the dynamic commands the first time the command palette is
@@ -237,8 +261,13 @@ const Spotlight = ({ config }) => {
     setQuery("");
     setResults([]);
     setError(null);
-    setScope(null);
+    setScope([]);
     setActiveIndex(0);
+  }, []);
+
+  // toggle a catalog scope chip; Ctrl/Meta click keeps the other selections
+  const onScope = useCallback((name, additive) => {
+    setScope((current) => toggleScope(current, name, additive));
   }, []);
 
   const openOverlay = useCallback(() => {
@@ -379,7 +408,7 @@ const Spotlight = ({ config }) => {
         <ScopeBar
           catalogs={catalogs}
           scope={scope}
-          onScope={setScope}
+          onScope={onScope}
           sortBy={sortBy}
           onSort={onSort}
         />
@@ -393,12 +422,14 @@ const Spotlight = ({ config }) => {
               commands={commands}
               results={sortedResults}
               suggestions={suggestions}
-              term={commandMode ? commandTerm : stateMode ? statePartial : term}
+              term={commandMode ? commandTerm
+                : stateMode ? statePartial : term}
               highlight={highlight}
               activeIndex={activeIndex}
               activeRef={activeRef}
               onHover={setActiveIndex}
               onSelect={selectEntry}
+              showActiveNote={showActiveNote}
             />
           ) : (
             <div className="spotlight-hint text-muted">
@@ -414,6 +445,10 @@ const Spotlight = ({ config }) => {
                 </li>
                 <li>
                   <code>is:received</code> {_t("filter by workflow state")}
+                </li>
+                <li>
+                  <code>{multiSelectKey()}</code>{" "}
+                  {_t("click a catalog to search several at once")}
                 </li>
               </ul>
             </div>

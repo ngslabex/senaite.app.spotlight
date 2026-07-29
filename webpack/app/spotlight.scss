@@ -249,6 +249,10 @@
 .spotlight-section + .spotlight-section { margin-top: 0.25rem; }
 
 .spotlight-section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
   padding: 0.5rem 0.75rem 0.3rem;
   font-size: 0.68rem;
   font-weight: 600;
@@ -445,6 +449,29 @@
 
 .spotlight-error { color: #e5484d; }
 
+.spotlight-active-note {
+  flex: 0 0 auto;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+  font-size: 0.72rem;
+  color: var(--sl-fg-muted);
+
+  code {
+    padding: 0.05rem 0.35rem;
+    border-radius: 5px;
+    background: var(--sl-keycap-bg);
+    color: var(--sl-keycap-fg);
+    font-family: var(--sl-mono);
+    font-size: 0.7rem;
+  }
+}
+
+.spotlight-empty-note {
+  margin-top: 0.6rem;
+  font-size: 0.78rem;
+}
+
 /* ------------------------------------------------------------------ footer */
 
 .spotlight-footer {
@@ -541,4 +568,52 @@
   .spotlight-panel,
   .spotlight-result,
   .spotlight-command { animation: none; }
+}
+
+/* -------------------------------------------- spotlight control panel grid */
+/* The spotlight bundle CSS loads on every page (via the viewlet), so scope
+   the DataGrid compacting strictly to the spotlight control panel to avoid
+   touching other control panels. The default grid spreads each column to its
+   input's natural width, overflowing very wide screens; this keeps it inside
+   a readable column and lets the cells shrink responsively. */
+body.template-spotlight-controlpanel {
+  .datagridwidget-table-view {
+    width: 100%;
+    max-width: 100%;
+    table-layout: fixed;
+
+    th,
+    td {
+      padding: 0.2rem 0.35rem;
+      vertical-align: top;
+      overflow: hidden;
+    }
+
+    /* header title + description: smaller and allowed to wrap */
+    th {
+      font-size: 0.78rem;
+
+      .formHelp {
+        font-size: 0.7rem;
+        font-weight: 400;
+      }
+    }
+
+    /* let the inputs shrink to their cell instead of forcing a min width */
+    input[type="text"],
+    input[type="number"],
+    select {
+      width: 100%;
+      min-width: 0;
+      padding: 0.2rem 0.4rem;
+      font-size: 0.8rem;
+    }
+
+    /* the auto-append/actions column stays only as wide as its buttons */
+    .datagridwidget-cell.actions-column,
+    td.datagridwidget-manipulator {
+      width: 1%;
+      white-space: nowrap;
+    }
+  }
 }

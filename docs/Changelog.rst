@@ -1,6 +1,10 @@
 2.7.0 (unreleased)
 ------------------
 
+- #39 Extend senaite.core's buildout.base.cfg instead of duplicating it
+- #38 Fix endless search loop from an unstable debounce dependency
+- #37 Improve spotlight catalog appearance and handling
+- #36 Hide inactive objects and lab-only catalogs from client contacts
 - #35 Remove the "Add" action from the standalone search page
 - #34 Auto-discover installed SENAITE catalogs into the spotlight search
 - #33 Rewrite the spotlight search as a React component
